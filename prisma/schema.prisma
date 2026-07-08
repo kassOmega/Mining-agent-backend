@@ -1,0 +1,304 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+    ADMIN
+    MODERATOR
+    CLIENT
+}
+
+enum SiteStatus {
+    PENDING // ⏳ Brand new submission. Invisible to public
+    UNVERIFIED // ⚠️ Paid, live on map, but displays a warning tag to investors
+    VERIFIED // ✅ Paid and documents approved. Live on map with a verified tag
+    REJECTED // ❌ Pulled offline entirely due to bad files / issues
+    CLOSED // 🎉 Deal finalized. Hidden from map and archived
+}
+
+enum ItemStatus {
+    PENDING
+    APPROVED
+    REJECTED
+}
+
+enum MachineryType {
+    EXCAVATOR
+    WATER_PUMP
+    WASHING_MACHINE
+    OTHER_EQUIPMENT
+}
+
+enum DealType {
+    RENT
+    SELL
+}
+
+enum SubscriptionPlan {
+    FREE
+    BASIC
+    PREMIUM
+}
+
+enum SubscriptionStatus {
+    ACTIVE
+    EXPIRED
+    CANCELLED
+}
+
+enum UserType {
+    OWNER
+    BROKER
+}
+
+// ============================================
+// USERS & AUTHENTICATION
+// ============================================
+
+model User {
+    id           String   @id @default(uuid())
+    email        String   @unique
+    passwordHash String   @map("password_hash")
+    fullName     String   @map("full_name")
+    phone        String?
+    role         UserRole @default(CLIENT)
+    userType     UserType @default(OWNER) @map("user_type")
+    isActive     Boolean  @default(true) @map("is_active")
+    createdAt    DateTime @default(now()) @map("created_at")
+    updatedAt    DateTime @updatedAt @map("updated_at")
+
+    // Relations
+    ownedSites    Site[]         @relation("SiteOwner")
+    verifiedSites Site[]         @relation("SiteVerifier")
+    subscription  Subscription?
+    auditLogs     AuditLog[]
+    machinery     Machinery[]
+    notifications Notification[]
+
+    @@map("users")
+}
+
+model Subscription {
+    id        String             @id @default(uuid())
+    userId    String             @unique @map("user_id")
+    plan      SubscriptionPlan   @default(FREE)
+    status    SubscriptionStatus @default(ACTIVE)
+    startDate DateTime           @default(now()) @map("start_date")
+    endDate   DateTime           @map("end_date") // Required (Mods set this 30 days out)
+    createdAt DateTime           @default(now()) @map("created_at")
+    updatedAt DateTime           @updatedAt @map("updated_at")
+
+    // Relations
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@map("subscriptions")
+}
+
+// ============================================
+// LOCATIONS (Zone, Woreda, Kebele)
+// ============================================
+
+model Zone {
+    id        String   @id @default(uuid())
+    name      String   @unique
+    createdAt DateTime @default(now()) @map("created_at")
+
+    // Relations
+    woredas Woreda[]
+
+    @@map("zones")
+}
+
+model Woreda {
+    id        String   @id @default(uuid())
+    name      String
+    zoneId    String   @map("zone_id")
+    createdAt DateTime @default(now()) @map("created_at")
+
+    // Relations
+    zone    Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+    kebeles Kebele[]
+
+    @@unique([name, zoneId])
+    @@map("woredas")
+}
+
+model Kebele {
+    id        String   @id @default(uuid())
+    name      String
+    woredaId  String   @map("woreda_id")
+    createdAt DateTime @default(now()) @map("created_at")
+
+    // Relations
+    woreda    Woreda      @relation(fields: [woredaId], references: [id], onDelete: Cascade)
+    sites     Site[]
+    machinery Machinery[]
+
+    @@unique([name, woredaId])
+    @@map("kebeles")
+}
+
+// ============================================
+// MINING SITES
+// ============================================
+
+model Site {
+    id            String @id @default(uuid())
+    userId        String @map("user_id")
+    kebeleId      String @map("kebele_id")
+    title         String
+    description   String @db.Text
+    siteTypeId    String
+    mineralTypeId String
+
+    areaSize        Float?     @map("area_size")
+    pictures        String     @default("[]")
+    documents       String     @default("[]")
+    receiptImage    String     @default("")
+    video           String?
+    googleMapsLink  String?    @map("google_maps_link")
+    isPublished     Boolean    @default(false) @map("is_published")
+    status          SiteStatus @default(PENDING)
+    isFeatured      Boolean    @default(false) @map("is_featured")
+    rejectionReason String?    @map("rejection_reason")
+    verifiedAt      DateTime?  @map("verified_at")
+    verifiedBy      String?    @map("verified_by")
+    createdAt       DateTime   @default(now()) @map("created_at")
+    updatedAt       DateTime   @updatedAt @map("updated_at")
+
+    // Relations
+    owner         User           @relation("SiteOwner", fields: [userId], references: [id], onDelete: Cascade)
+    kebele        Kebele         @relation(fields: [kebeleId], references: [id])
+    verifier      User?          @relation("SiteVerifier", fields: [verifiedBy], references: [id])
+    mineralType   MineralType    @relation(fields: [mineralTypeId], references: [id])
+    siteType      SiteType       @relation(fields: [siteTypeId], references: [id])
+    siteDocuments SiteDocument[]
+
+    @@map("sites")
+}
+
+model SiteType {
+    id        String   @id @default(uuid())
+    name      String   @unique // e.g., "ARTISANAL", "CUSTOM_SCALE"
+    label     String // e.g., "Artisanal", "Custom Scale"
+    sites     Site[]
+    createdAt DateTime @default(now())
+}
+
+model MineralType {
+    id        String   @id @default(uuid())
+    name      String   @unique // e.g., "GOLD", "LITHIUM"
+    label     String // e.g., "Gold", "Lithium"
+    sites     Site[]
+    createdAt DateTime @default(now())
+}
+
+// ============================================
+// MACHINERY & EQUIPMENT MARKETPLACE
+// ============================================
+
+model Machinery {
+    id              String        @id @default(uuid())
+    userId          String        @map("user_id")
+    kebeleId        String        @map("kebele_id")
+    title           String
+    description     String        @db.Text
+    type            MachineryType @default(OTHER_EQUIPMENT)
+    dealType        DealType      @map("deal_type")
+    price           Float
+    pictures        String        @default("[]")
+    video           String?
+    status          ItemStatus    @default(PENDING)
+    rejectionReason String?       @map("rejection_reason")
+    createdAt       DateTime      @default(now()) @map("created_at")
+    updatedAt       DateTime      @updatedAt @map("updated_at")
+
+    // Relations
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+    kebele Kebele @relation(fields: [kebeleId], references: [id])
+
+    @@map("machinery")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+    id        String   @id @default(uuid())
+    userId    String   @map("user_id")
+    title     String
+    message   String   @db.Text
+    type      String   @default("info")
+    isRead    Boolean  @default(false) @map("is_read")
+    createdAt DateTime @default(now()) @map("created_at")
+
+    // Relations
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@map("notifications")
+}
+
+// ============================================
+// AUDIT LOGS
+// ============================================
+
+model AuditLog {
+    id           String   @id @default(uuid())
+    userId       String?  @map("user_id")
+    action       String
+    resourceType String   @map("resource_type")
+    resourceId   String?  @map("resource_id")
+    ipAddress    String?  @map("ip_address")
+    details      String?  @db.Text
+    createdAt    DateTime @default(now()) @map("created_at")
+
+    // Relations
+    user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+    @@map("audit_logs")
+}
+
+// ============================================
+// CONTACT MESSAGES
+// ============================================
+
+model ContactMessage {
+    id        String   @id @default(uuid())
+    name      String
+    email     String
+    phone     String?
+    subject   String
+    message   String   @db.Text
+    isRead    Boolean  @default(false) @map("is_read")
+    createdAt DateTime @default(now()) @map("created_at")
+
+    @@map("contact_messages")
+}
+
+// ============================================
+// SITE DOCUMENTS
+// ============================================
+
+model SiteDocument {
+    id           String   @id @default(uuid())
+    siteId       String   @map("site_id")
+    filePath     String   @map("file_path")
+    originalName String   @map("original_name")
+    fileType     String   @map("file_type")
+    createdAt    DateTime @default(now()) @map("created_at")
+
+    // Relations
+    site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+    @@map("site_documents")
+}
