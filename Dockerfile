@@ -22,4 +22,4 @@ COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
 # Run production app
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]
