@@ -193,6 +193,7 @@ export class SitesService {
             phone: true,
             userType: true,
             email: true,
+            role: true,
           },
         },
         kebele: { include: { woreda: { include: { zone: true } } } },
@@ -211,6 +212,7 @@ export class SitesService {
             phone: site.owner.phone,
             userType: site.owner.userType,
             email: site.owner.email,
+            role: site.owner.role,
           }
         : null,
     };
