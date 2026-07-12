@@ -1,11 +1,14 @@
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import cookieParser from "cookie-parser";
+
 import * as express from "express";
 import helmet from "helmet";
 import * as path from "path";
 import { AppModule } from "./app.module";
+
+// Replace your current cookie-parser import with this line:
+import cookieParser = require("cookie-parser");
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
