@@ -9,12 +9,15 @@ import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
-  // 1. Security Headers (Configured to allow Swagger UI scripts in development)
+  // 1. Security Headers
   app.use(
     helmet({
       contentSecurityPolicy:
         process.env.NODE_ENV === "production" ? undefined : false,
+
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+
+      crossOriginEmbedderPolicy: false,
     }),
   );
 
