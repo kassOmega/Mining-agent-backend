@@ -165,6 +165,25 @@ async function main() {
     },
   });
 
+  const brokerPassword = await bcrypt.hash("admin123", 10);
+  await prisma.user.create({
+    data: {
+      email: "test@gmail.com",
+      passwordHash: brokerPassword,
+      fullName: "Test Broker",
+      phone: "+251913000000",
+      role: "CLIENT",
+      isActive: true,
+      subscription: {
+        create: {
+          plan: "FREE",
+          status: "ACTIVE",
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      },
+    },
+  });
+
   const modPassword = await bcrypt.hash("kass1234", 10);
   await prisma.user.create({
     data: {
